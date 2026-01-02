@@ -66,7 +66,7 @@ def speak_with_pyttsx3(text):
         
         # Force synchronous operation and wait for completion
         engine.runAndWait()
-        
+            
         # Need to explicitly stop and dispose
         engine.stop()
         
