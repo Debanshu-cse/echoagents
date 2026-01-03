@@ -1,5 +1,5 @@
 """
-Module to generate responses using a Hugging Face model.
+Module to generate responses using a Hugging Face model with RAG support.
 """
 
 import torch
@@ -9,10 +9,12 @@ import os
 import json
 from utils import logger
 from config import settings
+from core import rag
 
 # Global variables to store model and tokenizer
 model = None
 tokenizer = None
+use_rag = True  # Set to False to disable RAG
 
 def is_accelerate_available():
     """Check if the accelerate package is available."""
@@ -55,9 +57,14 @@ def ensure_model_type_in_config(config_path, original_model_name):
 
 def load_model():
     """
-    Load the Hugging Face model and tokenizer.
+    Load the Hugging Face model, tokenizer, and RAG system.
     """
-    global model, tokenizer
+    global model, tokenizer, use_rag
+    
+    # Initialize RAG system if enabled
+    if use_rag:
+        logger.info("Initializing RAG system...")
+        rag.initialize_rag()
     
     if settings.USE_CUSTOM_MODEL:
         logger.info(f"Loading custom model from: {settings.CUSTOM_MODEL_PATH}")
@@ -137,7 +144,7 @@ def load_default_model():
 
 def generate_response(prompt):
     """
-    Generate a response using the loaded Hugging Face model.
+    Generate a response using the loaded Hugging Face model with RAG augmentation.
     
     Args:
         prompt (str): The user's query
@@ -145,15 +152,22 @@ def generate_response(prompt):
     Returns:
         str: The model's response
     """
-    global model, tokenizer
+    global model, tokenizer, use_rag
     
     # Load the model if not loaded
     if model is None or tokenizer is None:
         load_model()
     
     try:
+        # Augment prompt with RAG context if enabled
+        if use_rag:
+            augmented_prompt, context = rag.augment_prompt(prompt, num_context_docs=3)
+            logger.info(f"Using RAG-augmented prompt with {len(context)} context documents")
+        else:
+            augmented_prompt = prompt
+        
         # Format input for the model
-        input_text = f"User: {prompt}\nAssistant:"
+        input_text = f"User: {augmented_prompt}\nAssistant:"
         
         # Tokenize the input without padding to avoid issues
         inputs = tokenizer(input_text, return_tensors="pt")
@@ -190,7 +204,5 @@ def generate_response(prompt):
         return response
         
     except Exception as e:
-        logger.error(f"Error generating response: {e}")
-        return "Sorry, I couldn't process that request."
         logger.error(f"Error generating response: {e}")
         return "Sorry, I couldn't process that request."
